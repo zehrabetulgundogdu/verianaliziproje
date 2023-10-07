@@ -1,0 +1,728 @@
+---
+title: "Untitled"
+output: html_document
+date: "2023-06-01"
+---
+
+####1.ADIM
+
+Veri Tanımı 2021'de bir çevrimiçi mağaza tarafından toplanan satış verileridir. Bu veri 11 sütun 65787 gözlemden oluşmaktadır. Verideki gözlem sayısı fazla olduğundan verinin yaklaşık %3'ü örneklem olarak yani 1965 gözlem seçilmiştir.
+
+Proje Tanımı Çevrimiçi mağazadaki satışların kupon kullanımına bağlı olarak web sitesinde geçirilen sürede müşterinin toplam satış oranının incelenmesi
+
+Değişken tanımları;
+
+| Değişken adı   | Türkçesi                             |
+|----------------|--------------------------------------|
+| Age            | Müşterinin yaşı                      |
+| Gender         | Cinsiyet                             |
+| Revenue_Total  | Müşteriye göre toplam satışlar       |
+| N_Purchases    | En son satın alma sayısı             |
+| Purchase_DATE  | En son satın alma tarihi             |
+| Purchase_VALUE | € cinsinden son satın alma           |
+| Pay_Method     | Ödeme Türü                           |
+| Time_Spent     | Web sitesinde geçirilen süre(saniye) |
+| Browser        | Tarayıcı                             |
+| Newsletter     | Abonelik                             |
+| Voucher        | Kupon kullanımı                      |
+
+```{r}
+library(readxl)
+satisveri <- read_excel("C:/Users/Acer/Desktop/Örneklem.xlsx")
+View(satisveri)
+
+```
+
+Kategorik verilerin açılımı;
+
+| Kategorik Veri | Açıklama                                                           |
+|-----------------|-------------------------------------------------------|
+| Gender         | **0**: Erkek, **1**:Kadın                                          |
+| Pay_Method     | **0**: Dijital Cüzdanlar, **1**: Kart, **2**: PayPal, **3**: Diğer |
+| Browser        | **0**: Chrome, **1**: Safari, **2**: Edge, **3**: Diğer            |
+| Newsletter     | **0**: Abone olmadım, **1**: Abone oldum                           |
+| Voucher        | **0**: kullanılmadı, **1**: kullanıldı                             |
+
+####2.ADIM
+
+###Proje Tanımı
+
+Çevrimiçi mağazadaki satışların kupon kullanımına bağlı olarak web sitesinde geçirilen sürede müşterinin toplam satış oranının incelenmesi
+
+####3.ADIM
+
+###Verilerin Toplanması
+
+Age, Revenue_total, N_Purchases, Purchase_VALUE, Time_Spent Nicel;
+Pay_Method, Browser, Newsletter, Voucher Nitel verilerdir.
+
+
+####4.ADIM
+
+###Verinin Yapısı ve Niteliği
+
+```{r}
+satisveri <- as.data.frame(satisveri)
+satisveri$Gender <- as.factor(satisveri$Gender)
+satisveri$Pay_Method <- as.factor(satisveri$Pay_Method)
+satisveri$Browser <- as.factor(satisveri$Browser)
+satisveri$Newsletter <- as.factor(satisveri$Newsletter)
+satisveri$Voucher <- as.factor(satisveri$Voucher)
+
+summary(satisveri)
+```
+
+Bu veride,    
+    müşterinin minimum yaşı 16, ortalama yaş 39 ve maksimum yaş 63 olduğu söylenebilir. 
+    erkek müşteri sayısı 647, kadın müşteri sayısı 1318'dir. 
+    toplam satışların minimumu 0.5 cent, ortalama 30.10€ ve maksimum 59.90€'dur 
+    dijital cüzdan kullanan 555, kart kullanan 576, PayPal kullanan 439 ve diğer ödeme yöntemlerini kullanan 395 müşteri vardır. 
+    siparişler en kısa 120 saniye, en fazla 1080 saniye sürmüştür. 
+    müşterilerin 1265'i Chrome tarayıcısını, 399'u Safari tarayıcısını, 96'sı Edge tarayıcısını ve 205'i diğer tarayıcıları tercih etmiştir. 
+    Bültene abone olanlar 290 müşteri, abone olmayan 1675 müşteri vardır. 
+    1437 kişi kupon kullanmamışken 528 kişi kupon kullanmıştır.
+
+
+```{r}
+str(satisveri)
+```
+```{r}
+rowSums(is.na(satisveri))
+colSums(is.na(satisveri))
+```
+Bu veride kayıp gözlem bulunmamaktadır.
+
+####5.ADIM
+
+###Eğitim ve Test Kümelerinin oluşturulması
+
+```{r}
+#Random missing deger 
+data_miss <- satisveri
+set.seed(123)
+aa <- sample(1:nrow(data_miss),floor(nrow(data_miss)*0.05))
+data_miss$Age[aa] <- NA
+colSums(is.na(data_miss))
+
+#Eksik Gozlemlerin Yapısının Incelenmesi
+library(mice)
+md.pattern(data_miss) 
+md.pattern(data_miss[,c("Gender","Age","Time_Spent","Revenue_Total",  "Pay_Method", "Time_Spent", "Browser", "Newsletter","Voucher")])
+```
+
+
+
+
+```{r}
+#ortalamayla eksik gözlemlere atama yapalım.
+data_o <- data_miss
+hist(data_o$Age)
+data_o$Age[is.na(data_ort$Age)] <- mean(data_ort$Age,na.rm=TRUE)
+```
+
+
+
+```{r}
+#Eksik gözlemlere göz atalım.
+z <- which(is.na(data_miss$Age)) 
+z
+```
+
+
+
+```{r}
+#Ortalamayla doldurduğumuz eksik gözlemleri inceleyelim. 
+data_ort$Age[z]
+```
+
+
+```{r}
+library("openxlsx")
+write.xlsx(data_o,'satisyeni.xlsx')
+```
+
+
+
+```{r}
+# İlk önce rasgeleliği sabitleyelim.
+set.seed(123456)
+```
+
+
+```{r}
+#Eğitim-test kümesini ayıralım.
+trainIndex <- sample(1:nrow(satisyeni), size = round(0.8*nrow(satisyeni)), replace = FALSE)
+egitimveri <- satisyeni[trainIndex,]
+test <- satisyeni[-trainIndex,]
+```
+
+
+```{r}
+egitimveri$vouch <- ifelse(egitimveri$Voucher==1,"Kullanıldı","Kullanılmadı")
+```
+
+
+```{r}
+#Kategorik değişkenler
+egitimveri<- as.data.frame(egitimveri)
+egitim$Gender <- as.factor(egitimveri$Gender)
+egitim$Pay_Method <- as.factor(egitimveri$Pay_Method)
+egitimveri$Browser <- as.factor(egitimveri$Browser)
+egitimveri$Newsletter <- as.factor(egitimveri$Newsletter)
+egitimveri$Voucher <- as.factor(egitimveri$Voucher)
+egitimveri$vouch <- as.factor(egitimveri$vouch)
+summary(egitimveri)
+```
+
+
+####6.ADIM
+
+###VERİLERİN AÇIKLYAYICI ÇÖZÜMLEMESİ
+
+Kategorik Değişkenler için Frekans
+```{r}
+library("funModeling")
+freq(egitimveri) 
+```
+
+Kupon kullananlar 399 kişi iken, Kullanmayanlar 1173 kişidir.
+
+Ödeme Türünde Dijital Cüzdan kullanan 433 kişi, Kart kullanan 459 kişi, Paypal kullanan 353 kişi ve diğer ödeme yöntemi kullanan ise 327 kişidir.
+
+Tarayıcı chrome kullanan 1067 kişi, safari kullanan 307 kişi, Edge kullanan 77 kişi ve diğer tarayıcılar kullanan ise 181 kişidir.
+
+Aboneliği olan 233 kişi iken abone olmayan 1339 kişidir.
+
+
+
+###Niceller için Frekans
+```{r}
+profiling_num(egitimveri)
+plot_num(egitimveri)
+
+```
+
+Yaş, Toplam satın alma sayısı ve internette geçişilen süre normal dağıldığı görülmektedir.
+
+Müşteriye göre toplam satışlar ise sola çarpıktır.
+
+
+###Nokta Özeti
+```{r}
+quantile(egitimveri$Revenue_Total)
+quantile(egitimveri$Revenue_Total, c(.1,.9))
+```
+
+Müşteriye göre toplam satış tutarı 0,10 ile 0,90 değerleri arasında değerler 6,31 ile 47,30 arasındadır
+
+###DAG
+```{r}
+q1 <- as.vector(quantile(egitimveri$Revenue_Total,0.25))
+q3 <- as.vector(quantile(egitimveri$Revenue_Total,0.75))
+DAG <- q3-q1
+DAG
+```
+
+
+###Genişlik
+
+```{r}
+genislik <- max(egitimveri$Revenue_Total)-min(egitimveri$Revenue_Total)
+genislik
+```
+
+
+###Değişim Ölçüleri
+
+```{r}
+stRev <-stdev <- sd(egitimveri$Revenue_Total)
+stRev
+meanRev <- mean <- mean(egitimveri$Revenue_Total)
+meanRev
+Degisim_kats_age <- (stdev/mean)*100
+Degisim_kats_age
+```
+
+
+```{r}
+#Cinsiyete göre yayılımı icin:
+sd_dk <- function(x) {c(std<-sd(x), dk<-(sd(x)/mean(x))*100)}
+tapply(egitimveri$Revenue_Total, egitimveri$Gender, sd_dk)
+```
+
+###MAD
+
+```{r}
+sort <- egitimveri[order(egitim$Revenue_Total),]
+medianf <- median(sort$Revenue_Total)
+sort$fmed <- abs(sort$Revenue_Total-medianf)
+sort2 <- sort[order(sort$fmed),]
+mad <- median(sort2$fmed)
+mad
+```
+
+###Genişletilmiş Nokta Özeti
+
+```{r}
+#Sol kuyruk
+sol <- function(x) {
+  c(quantile(x, probs = 1/2) , 
+    quantile(x, probs = 1/4),
+    quantile(x, probs =1/8 ),
+    quantile(x,probs=1/16),
+    quantile(x,probs=1/32),
+    quantile(x,probs=1/64)
+  )
+}
+#Sag kuyruk
+sag <- function(x) {
+  c(quantile(x, probs = 1/2) , 
+    quantile(x, probs = 3/4),
+    quantile(x, probs = 7/8),
+    quantile(x,probs=15/16),
+    quantile(x,probs=31/32),
+    quantile(x,probs=63/64)
+  )
+}
+#cinsiyete gore sol kuyruk 
+y <- tapply(egitimveri$Revenue_Total, egitimveri$Gender, sol)
+mrg_cins <- as.data.frame(cbind(y[[1]],y[[2]]))
+colnames(mrg_cins) <- c("Female","Male")
+mrg_cins$Fark <- abs(mrg_cins$Female-mrg_cins$Male)
+mrg_cins
+```
+
+
+
+```{r}
+#Kuyruk Uzunlugu Incelemesi
+x_a <- sol(egitimveri$Revenue_Total)
+x_u <- sag(egitimveri$Revenue_Total)
+x_mrg <- as.data.frame(cbind(x_a,x_u))
+rownames(x_mrg) <- c("1/2","1/4","1/8","1/16","1/32","1/64")
+colnames(x_mrg) <- c("Alt_Kuyruk","Ust_Kuyruk")
+x_mrg$orta_nokta <- (x_mrg$Alt_Kuyruk+x_mrg$Ust_Kuyruk)/2
+x_mrg
+hist(egitimveri$Revenue_Total)
+```
+
+Müşteriye göre toplam satış tutarı grafiğine baktığımızda veri sağa çarpık ve basık olduğu söylenebilir
+
+
+
+###Çarpıklık
+
+```{r}
+library(moments)
+skewness(egitimveri$Revenue_Total,na.rm = T)
+```
+
+
+
+###Basıklık
+
+```{r}
+library(moments)
+kurtosis(egitimveri$Revenue_Total,na.rm = T)
+```
+
+
+
+```{r}
+#Kesilmis ortalama
+p <- 0.1
+mean(egitimveri$Revenue_Total, trim = p)
+#Kalan gozlem sayısı hesaplanmak istenirse:
+n <- nrow(egitimveri)
+ks <-n-(as.integer(2*p*n)) 
+ks
+```
+
+kestirilmiş ortalama 27,58 bulunmuştur
+
+
+```{r}
+#Geometrik ortalama
+library("psych")
+geometric.mean(egitimveri$Revenue_Total)
+```
+
+Geometrik ortalama 21,65 bulunmuştur
+
+
+```{r}
+#Gini 
+freq <- as.data.frame(table(egitimveri$Gender))
+names(freq)[1] <- 'cinsiyet'
+
+gini <- function(a,b) {
+  a1 <- (a/(a+b))**2
+  b1 <- (b/(a+b))**2
+  x<-1-(a1 + b1)
+  return(x)
+}
+gn <- gini(freq[1,2],freq[2,2])
+k <- 2
+gn/((k-1)/k)
+
+#Entropi
+entropy <- function(base,a,b) {
+  var <-  abs(((a)/(a+b))*log(((a)/(a+b)),base))-(((b)/(a+b))*log(((b)/(a+b)),base))
+  return(var)
+}
+ent <- entropy(10,freq[1,2],freq[2,2])
+k <- 2
+ent/(log(k,10)) 
+```
+
+Gini değeri 0,89 olduğundan 1 değerine daha yakındır bu yüzden düzensizlik olduğu söylenebilir. Homojen değildir
+
+Entropi deperi 0,92 olduğundan 1 değerine daha yakındır bu yüzden düzensizlik olduğu söylenebilir. Homojen değildir.
+
+
+```{r}
+#Chi-square
+dt_c <- table(egitimveri$Revenue_Total,egitimveri$Age)
+dtc_exp <- chisq.test(dt_c)$expected
+rowcs <- function(i, obs, exp) {
+  sum(((obs[i,] - exp[i,])^2)/exp[i,])
+}
+
+chi_dtc <- as.matrix(lapply(seq_len(nrow(dt_c)), rowcs, obs = dt_c, exp = dtc_exp))
+rownames(chi_dtc) <- rownames(dt_c)
+chi_dtc
+```
+
+
+
+
+```{r}
+#BAR PLOT
+ggplot(egitimveri, aes(Age, fill = Gender)) + 
+  geom_bar() + 
+  geom_text(aes(label=..count..),stat="count",position=position_stack(0.5))
+
+```
+
+Cinsiyet ve yaşa göre kıyaslama yapıldığında kadın müşterilerin erkek müşterilere göre daha fazla olduğu söylenebilir. 
+
+
+```{r}
+#Yuzdesel olarak:
+library(dplyr)
+tra_pct <- egitimveri %>% group_by(Age, Gender) %>%
+  dplyr::summarise(count=n()) %>%
+  mutate(pct=round(count/sum(count),2))
+
+ggplot(tra_pct, aes(Age, pct, fill = Gender)) + 
+  geom_bar(stat='identity') + 
+  geom_text(aes(label=scales::percent(pct)), position = position_stack(vjust = .5))+
+  scale_y_continuous(labels = scales::percent)
+```
+```{r}
+#PIE CHART
+
+library(plotly)
+cross<-as.data.frame(prop.table(table(egitimveri$Revenue_Total))) 
+colnames(cross)[1] <- "Revenue_Total"
+plot_ly(cross, labels = ~Revenue_Total, values = ~Freq, type = 'pie')%>% layout(title ='Kolesterol Degişkenindeki Dağılım')
+```
+
+Cinsiyet ve yaşa göre yüzdesel kıyaslama yapıldığında kadın müşterilerin erkek müşterilere göre daha fazla olduğu söylenebilir. 
+
+
+
+```{r}
+#HISTOGRAM
+hist(egitimveri$Revenue_Total, col = "pink")
+#Ya da 
+ggplot(egitimveri,aes(Revenue_Total))+
+  geom_histogram()
+```
+
+Müşteriye göre toplam satış tutarı sola çarpık olduğu söylenebilir
+
+
+
+```{r}
+k <- ceiling((log(2*nrow(egitimveri)))+1) 
+genislik <- max(egitimveri$Revenue_Total)-min(egitimveri$Revenue_Total)
+binw <- genislik/k
+
+ggplot(egitimveri,aes(Revenue_Total))+
+  geom_histogram(binwidth=binw,
+                 fill="steelblue",colour="black", alpha=0.6)
+```
+
+Müşteriye göre toplam satışının toplam sayısına bakıldığında normale yakın dağıldığı gözükmektedir.
+
+
+```{r}
+#Kategorik degisken düzeylerinde kırılım:
+ggplot(egitimveri,aes(Revenue_Total,fill=Gender))+
+  geom_histogram(binwidth=binw)+
+  facet_grid(Gender~.)
+```
+
+
+```{r}
+#Yogunluk grafigi
+ggplot(egitimveri,aes(Revenue_Total))+
+  geom_density()
+
+```
+
+Karma bir dağılım olduğu görülmektedir.
+
+
+```{r}
+#Histogram+Yogunluk bırlıkte
+ggplot(egitimveri,aes(Revenue_Total))+
+  geom_histogram(aes(y=..density..), fill="lightblue", color="black")+
+  geom_density(alpha=.4,fill="purple")
+```
+
+```{r}
+#Q-Q PLOT
+library(ggpubr)
+ggqqplot(egitimveri$Revenue_Total)
+qqnorm(egitimveri$Revenue_Total)
+```
+
+İç bükey konkav dağıllım görülmektedir. Pozitif dağılım.
+
+```{r}
+#BOX PLOT
+ggplot(egitimveri, aes(y=Revenue_Total))+
+  geom_boxplot()
+
+ggplot(egitimveri, aes(x=Age,y=Revenue_Total, fill=Age))+
+  geom_boxplot()+
+  labs(title="Yaş Kategorileri İçin FEV Kutu Çizimi",
+       x="Yaş Kategorileri", y = "Revenuel")+
+  scale_fill_discrete(name = "Yaş Kategorileri")+
+  stat_summary(fun = median, geom="line", group= 1, color= "black", size = 1) 
+```
+
+
+```{r}
+#3. bir kategorik degiskenin de eklenmesi:
+ggplot(egitimveri, aes(x = Age, y = Revenue_Total, fill = Gender)) +
+  geom_boxplot(position = position_dodge(width = 0.9)) +
+  stat_summary(fun = median,geom = 'line',
+               aes(group = Gender, colour = Gender),size=1,
+               position = position_dodge(width = 0.9))
+```
+
+
+```{r}
+
+#Sacılım Cizimi:
+library(tidyverse)
+ggplot(egitimveri, aes(Age,Revenue_Total))+
+  geom_point(size=2,shape=21,stroke=1,color="dodgerblue1", fill="white")+
+  geom_smooth(method = "lm", col="darkblue",se = FALSE)
+
+```
+
+Geniş yayılımlı saçılım grafiği görülmetedir.
+Doğrusallık vardır.
+
+```{r}
+#Ikili-cinsiyet kırılımında:
+ggplot(egitimveri, aes(Age,Revenue_Total, color=Gender, shape=Gender))+
+  geom_point(size=3,alpha=0.6)
+```
+
+Genel olarak baktığımızda her tarafa eşit gibi görülen dağılımda az yoğunlukta ortada toplanmaktadır.
+
+```{r}
+ggplot(egitimveri, aes(x=Age, y=Revenue_Total) ) +
+  stat_density_2d(aes(fill = ..level..), geom = "polygon")+
+  scale_fill_distiller(palette = "Blues")#direction=1
+```
+
+```{r}
+#SACILIM MATRISLERI
+cor_veri <- egitimveri[,c(3,1,2)]
+library(GGally)
+cor(cor_veri)#Korelasyon degerleri
+plot(cor_veri)
+ggpairs(cor_veri)#yogunluk+sacılım+corr
+```
+
+```{r}
+#Sacılım matrisi- Histogram+Yogunluk+Duzlestırme+Korelasyon
+b <- GGally::ggpairs(egitimveri[,c(1:3,6)], aes(color =Purchase_VALUE ))
+b
+
+
+```
+
+```{r}
+#Ortanca Izi Cizimi
+plot(egitimveri$Revenue_Total,egitimveri$Median, xlab="Revenue kategori", ylab="Ortanca", main="Ortanca izi cizimi")
+
+#Buradan da gorulur:
+ggplot(egitimveri, aes(x=Revenue_Total,y=Pay_Method, fill=Age))+
+  geom_boxplot()+
+  stat_summary(fun = median, geom="line", group= 1, color= "black", size = 1) 
+
+```
+
+Ortanca değerlerinden eğri çizildiğinde doğrusala yakın olduğu görülmektedir.
+
+
+```{r}
+#Konum-Varyans Cizimi
+medianRev <- median(egitimveri$Revenue_Total)
+ggplot(egitimveri, aes(x=medianRev,y=DAG, color=Revenue_Total, group=1))+
+  geom_point(size=4,alpha=0.6)+
+  geom_line(color="black")
+```
+
+DAG değeri 21,975 ile Medyan değeri 30,150 noktasında toplandığı görülmektedir.
+
+
+####7.ADIM
+
+###Birliktelik
+
+```{r}
+#02.05
+
+#ETKILESIM 
+#2 değişenin yani cinsiyet ile yaşın birlikte etkisi var mı yok mu bunu incelemek icin:
+etksatis <- egitimveri%>%
+  group_by(Gender,Age)%>% 
+  summarise(Median=median(Revenue_Total))
+etksatis
+
+ggplot(etksatis, aes(x = Age, y = Median,color=Gender,group=Gender)) +
+  geom_line() +
+  geom_point()
+```
+
+Cinsiyet ve yaşın, toplam satış sayısına göre etkileşim içerisinde olduğu söylenebilir.
+
+```{r}
+etksatis <- egitimveri%>%
+  group_by(Gender,Pay_Method)%>% 
+  summarise(Median=median(Revenue_Total))
+etksatis
+
+ggplot(etksatis, aes(x = Pay_Method, y = Median,color=Gender,group=Gender)) +
+  geom_line() +
+  geom_point()
+```
+
+Kesişmediği için etkileşim yoktur.
+
+####8.ADIM
+
+###Dönüşüm
+
+```{r}
+#Boy-Revenue_Total:
+ggplot(egitimveri, aes(Revenue_Total,Pay_Method))+
+  geom_point()+
+  geom_smooth(method = "loess", col="red",se = FALSE)
+
+egitimveri$Revenue_Total_log<-log10(egitimveri$Revenue_Total) # logaritmik dönüsüm
+```
+
+Logaritmik bir dönüşüm yapıldığında doğrusallığın oluştuğu söylenebilir.
+
+
+```{r}
+#yeniden grafiklerine bakılırsa;
+hist(egitimveri$Revenue_Total_log, col = "lightpink",main="Log(Revenue_Total)")
+
+ggplot(egitimveri, aes(Pay_Method,Revenue_Total_log,label=rownames(egitimveri)))+
+  geom_point(size=0.90) + geom_text(label=rownames(egitimveri),nudge_x=0.20,check_overlap=T,size=2.5)+
+  geom_smooth(method="loess",col="red",se=FALSE)
+```
+
+
+```{r}
+#Age-FEV
+hist(egitimveri$Age)
+egitimveri$Age_log<-log10(egitimveri$Age) #Age'de logaritmik dönüsüm
+hist(egitimveri$Age_log)
+
+egitimveri$Age_kok<-sqrt(egitimveri$Age) #Age'de kok dönüsümü
+hist(egitimveri$Age_kok) 
+
+```
+
+1.Normal dağılım olmayıp basık bir grafiktir.
+2.Sola çarpık dağılım ve sivri dağılım görülmektedir
+3.Sola çarpık dağılım ve basık dağılım görülmektedir
+
+
+```{r}
+#polinomial 
+#merkezilestirme:
+mean_age <- mean(egitimveri$Revenue_Total)
+egitimveri$Age_merk <- (egitimveri$Age-mean_age)
+
+library(ggplot2)
+ggplot(egitimveri, aes(x = Age_merk, y =Revenue_Total_log )) +
+  stat_smooth(method = "lm", se = FALSE, color = "green", formula = y ~ x) +
+  stat_smooth(method = "lm", se = FALSE, color = "blue", formula = y ~ x + I(x ^ 2)) +
+  stat_smooth(method = "lm", se = FALSE, color = "red", formula = y ~ x + I(x ^ 2)+ I(x ^ 3)) +
+  geom_point(colour = "black", size = 1)
+
+
+```
+
+
+
+```{r}
+#Tukey's Ladder 
+library(rcompanion)
+FEV_tukey <- transformTukey(egitimveri$Revenue_Total,plotit=FALSE)
+
+Age_tukey <- transformTukey(egitimveri$Age, plotit=FALSE)
+
+#BOX-COX
+library(MASS)
+#FEV icin
+Box_kol <- boxcox(egitimveri$Revenue_Total ~ 1,            
+                  lambda = seq(-6,6,0.1))      # Try values -6 to 6 by 0.1
+Cox_kol <- data.frame(Box_kol$x, Box_kol$y) 
+Cox_kol <- Cox_kol[order(-Cox_kol$Box_kol.y),]  
+Cox_kol[1,] 
+lambda <- Cox_kol[1, "Box_fev.x"]
+lambda
+```
+
+Parabolik dağılım görülmektedir.
+
+
+###Sonuç olarak,
+
+Verilerin nasıl dağılım gösterdiği, nitel nicel durumu, gerekli olan grafikleri kullanarak analiz yapılmıştır.
+
+Kupon kullanımı, Ödeme türü, Toplam satış sayısı gibi değişkenleri kullanarak analiz yapılmıştır.
+
+
+###Kaynakça
+
+Veri Linki
+https://www.kaggle.com/datasets/onlineretailshop/online-shop-customer-sales-data
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
